@@ -41,7 +41,7 @@ fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 # ==========================================
 # PAINEL A: Partos
 # ==========================================
-rects1_a = ax1.bar(x - largura/2, partos_real, largura, label='Real (HRTN)', 
+rects1_a = ax1.bar(x - largura/2, partos_real, largura, label='Real (hospital)', 
                    color=cor_real, edgecolor='#333333', linewidth=0.8, alpha=1)
 rects2_a = ax1.bar(x + largura/2, partos_sim, largura, label='Simulado (DESK)', 
                    color=cor_sim, edgecolor='#333333', linewidth=0.8, alpha=1) # , hatch='//'
@@ -87,7 +87,7 @@ plt.tight_layout(pad=3.0)
 
 # Salva a figura em PDF e PNG
 # plt.savefig('validacao_modelo_matplotlib.pdf', format='pdf', dpi=300, bbox_inches='tight')
-# plt.savefig('validacao_modelo_matplotlib.png', format='png', dpi=300, bbox_inches='tight')
+plt.savefig('validacao_modelo_matplotlib.png', format='png', dpi=300, bbox_inches='tight')
 
 print("Gráficos gerados e salvos com sucesso!")
 plt.show()

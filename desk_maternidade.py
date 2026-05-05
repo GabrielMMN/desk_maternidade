@@ -1,5 +1,3 @@
-import pandas as pd
-import random
 import sys
 from desk.core.simulation_model import SimulationModel
 from desk.config.simulation_config import SimulationConfig
@@ -18,14 +16,17 @@ from desk.validation.stability import StabilityAnalyzer
 
 from desk.stats.replication import ReplicationFramework
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-
-
-# Para o Split/Separate Block
+# Para o Separate Block
 from desk.core.base_block import BaseBlock
 from desk.core.entity import Entity
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import random
+
+
+
 
 
 class NascimentoBlock(BaseBlock):
@@ -42,42 +43,39 @@ class NascimentoBlock(BaseBlock):
         self.next_block_rn = next_block
 
     def process_entity(self, mae: Entity):
-        # 1. Cria a entidade do Recém-Nascido dinamicamente
-        rn = Entity(id=f"RN_{mae.id}", creation_time=self.env.now)          # Corrigido de name para id
+        # Cria a entidade do Recém-Nascido
+        rn = Entity(id=f"RN_{mae.id}", creation_time=self.env.now)
         self.entities_created += 1 # incrementa contador
         rn.priority = mae.priority # Opcional: herdar prioridade da mãe
 
+        # Decide se o RN precisa de UCP
         decisao_ucp = random.choices([True, False], [10, 90], k=1)[0]
         rn.add_attribute('decide_ucp', decisao_ucp)
 
-        # Cria o evento de sincronização - NOVO
+        # Cria o evento de sincronização
         evento_alta_conjunta = self.env.event()
         
-        # Guarda o mesmo evento nos dois prontuários - NOVO
+        # Guarda o mesmo evento nos dois prontuários
         mae.add_attribute('evento_alta', evento_alta_conjunta)
         rn.add_attribute('evento_alta', evento_alta_conjunta)
         
-        # 2. Faz a vinculação dos prontuários (O segredo para a Alta Conjunta)
+        # 2. Faz a vinculação dos prontuários (para a Alta Conjunta)
         mae.add_attribute('filho', rn)
         rn.add_attribute('mae', mae)
 
-        # Aplica os atributos que o usuário configurou no script (assign/modify) ao bebê!
-        # Como herdamos de BaseBlock, estes métodos já existem com segurança.
+        # Aplica os atributos (assign/modify) ao bebê
         super()._apply_attributes(rn)
         super()._modify_attributes(rn)
         
-        # 3. Registra o nascimento no EventLogger -- NÃO ESTÁ PRINTANDO NO LOG ?? --> Acho que consertou
         if self.event_logger:
-            # self.event_logger.log_event(self.env.now, '✨ NASCIMENTO', rn.id, self.name, f"Filho de {mae.id}")
-            self.event_logger.log_event(rn.id, self.name, self.env.now, 'create', None, details=f"Filho de {mae.id}")    # Ordem dos argumentos ajustada
-                                                                        # 'create', 'start ou 'complete' ?
+            self.event_logger.log_event(rn.id, self.name, self.env.now, 'create', None, details=f"Filho de {mae.id}")
 
 
-        # 4. Inicia o fluxo do Bebê de forma assíncrona (Paralelismo no SimPy)
+        # Inicia o fluxo do Bebê de forma assíncrona
         if self.next_block_rn:
             self.env.process(self.next_block_rn.process_entity(rn))
 
-        # 5. A mãe continua o fluxo normal dela (yield from tranca a mãe neste fluxo)
+        # A mãe continua o fluxo normal dela (yield from tranca a mãe neste fluxo)
         if self.next_block:
             yield from self.next_block.process_entity(mae)
         else:
@@ -96,7 +94,7 @@ class AguardaAltaBlock(BaseBlock):
             if self.event_logger:
                 self.event_logger.log_event(rn.id, self.name, self.env.now, 'start', None, details="Aguardando a mãe")
             
-            # O bebê congela no tempo aqui!
+            # O bebê espera o sinal
             yield evento 
             
             if self.event_logger:
@@ -155,7 +153,7 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
             'consulta' : random.triangular(12, 30, 15),
             'exames_observacao' : random.triangular(120, 240, 180),
             'proc_especial' : random.triangular(30, 60, 40),
-            'inducao_parto' : random.triangular(360, 1440, 720),  # Original 720, 1440, 1080
+            'inducao_parto' : random.triangular(360, 1440, 720),
             'trabalho_parto' : random.triangular(360, 600, 480),   
             'parto_normal' : random.triangular(45, 75, 60),        
             'parto_cesarea' : random.triangular(75, 105, 90),      
@@ -173,7 +171,7 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
     # Human resources
     recepcionista = model.add_resource('recepcionista', capacity=1, resource_type='regular')
     enf_triagem = model.add_resource('enf_triagem', capacity=1, resource_type='regular')
-    med_consulta = model.add_resource('med_consulta', capacity=2, resource_type='priority')  # Original: 2
+    med_consulta = model.add_resource('med_consulta', capacity=2, resource_type='priority')
     med_obstetra = model.add_resource('med_obstetra', capacity=1, resource_type='priority')
     med_anestesista = model.add_resource('med_anestesista', capacity=1, resource_type='priority')
     med_pediatra = model.add_resource('med_pediatra', capacity=3, resource_type='priority')
@@ -184,8 +182,8 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
     tec_enf_neonatal = model.add_resource('tec_enf_neonatal', capacity=16, resource_type='regular')  # original: 8
 
     # Infrastructure
-    consultorio = model.add_resource('consultorio', capacity=2, resource_type='priority') # Original: 2
-    leito_inducao = model.add_resource('leito_inducao', capacity=2, resource_type='priority')  # Original: 2
+    consultorio = model.add_resource('consultorio', capacity=2, resource_type='priority')
+    leito_inducao = model.add_resource('leito_inducao', capacity=2, resource_type='priority')
     sala_parto_normal = model.add_resource('sala_parto_normal', capacity=3, resource_type='priority')
     sala_cesarea = model.add_resource('sala_cesarea', capacity=1, resource_type='priority')
     sala_proc_esp = model.add_resource('sala_proc_esp', capacity=1, resource_type='priority')
@@ -193,6 +191,7 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
     leito_ucp = model.add_resource('leito_ucp', capacity=16, resource_type='regular')
     alojamento = model.add_resource('alojamento', capacity=25, resource_type='regular')
 
+    # Gerador de prioridades (Classificação de Risco Obstétrico)
     def patient_severity():
         severity_dist = [15, 35, 35, 15]
         return random.choices([0, 1, 2, 3], weights=severity_dist)[0]
@@ -249,7 +248,7 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
 
             # 2. Lógica de probabilidades dinâmicas
             if n_aval == 1:
-                enc = random.choices(['A', 'B', 'C', 'D', 'E'], [70, 1, 16, 5, 8], k=1)[0]   # 70, 2, 15, 5, 8  ;  0, 0, 0, 0, 0
+                enc = random.choices(['A', 'B', 'C', 'D', 'E'], [70, 1, 16, 5, 8], k=1)[0]
             else:
                 # Na reavaliação, o 'E' (peso 0) é matematicamente impossível
                 enc = random.choices(['A', 'B', 'C', 'D', 'E'], [80, 0, 0, 20, 0], k=1)[0]
@@ -271,15 +270,11 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
         med_consulta : 'med_consulta',
         consultorio : 'consultorio'
     })
-    # consulta.assign_attributes(encaminhamento= lambda: random.choices(['A', 'B', 'C', 'D', 'E'],[70, 2, 15, 5, 8], k=1)[0])  # 70, 2, 15, 5, 8
-
-    # Usamos apenas UMA chamada para modificar o "prontuario" inteiro
     consulta.modify_attributes(prontuario=lambda current: atualizar_status_consulta(current))
 
 
     tratamento = DecideBlock('Desvio', model.env, decision_type='condition', event_logger=event_logger)
-    # A regra agora lê o dicionário 'prontuario' no prontuário da entidade.
-    # O encadeamento .get('prontuario', {}).get('encaminhamento') evita erros se a chave não existir.
+
     tratamento.add_route('Saida', next_block=None, condition=lambda e: e.get_attribute('prontuario', {}).get('encaminhamento') == 'A')
     tratamento.add_route('Proc_Esp', next_block=None, condition=lambda e: e.get_attribute('prontuario', {}).get('encaminhamento') == 'B')
     tratamento.add_route('Parto', next_block=None, condition=lambda e: e.get_attribute('prontuario', {}).get('encaminhamento') == 'C')
@@ -302,17 +297,11 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
     })
 
 
-    # Decide se precisa ou não de indução
-    # precisa_inducao = DecideBlock('Precisa_Inducao', model.env, decision_type= 'probability', event_logger= event_logger)
-    # precisa_inducao.add_route('Sim', next_block=None, probability=0.4)  # 0.15
-    # precisa_inducao.add_route('Nao', next_block=None, probability=0.6)  # 0.85
-
-
-    # SOLUÇÃO 2: Possibilidades para o Parto
+    # Possibilidades para o Parto
     define_parto = DecideBlock('Define_Parto', model.env, decision_type= 'probability', event_logger= event_logger)
-    define_parto.add_route('Trabalho_Parto', next_block=None, probability= 0.6) # 0.6
-    define_parto.add_route('Cesarea_risco', next_block=None, probability= 0.2) # 0.15
-    define_parto.add_route('Inducao', next_block=None, probability= 0.2) # 0.25
+    define_parto.add_route('Trabalho_Parto', next_block=None, probability= 0.6) 
+    define_parto.add_route('Cesarea_risco', next_block=None, probability= 0.2) 
+    define_parto.add_route('Inducao', next_block=None, probability= 0.2) 
 
 
     inducao = MultiProcessBlock(
@@ -331,13 +320,13 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
 
 
     inducao_funcionou = DecideBlock('Inducao_funcionou', model.env, decision_type= 'probability', event_logger=event_logger)
-    inducao_funcionou.add_route('Sim', next_block=None, probability=0.8)  # Trabalho de Parto -> Parto Normal ; 0.64
-    inducao_funcionou.add_route('Nao', next_block=None, probability=0.2)  # Cesárea ; 0.36
+    inducao_funcionou.add_route('Sim', next_block=None, probability=0.8)  # Trabalho de Parto -> Parto Normal
+    inducao_funcionou.add_route('Nao', next_block=None, probability=0.2)  # Cesárea
 
 
     trabalho_parto = ProcessBlock(
         'Trabalho_parto', model.env,
-        resource=None,   # TODO: leito de Cuidado Materno-Infatil
+        resource=None,
         delay_time= lambda: distributions('trabalho_parto'),
         event_logger=event_logger
     )
@@ -351,7 +340,7 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
             med_pediatra : 1,
             enf_obstetra : 1,
             tec_enf_bloco : 1,
-            enf_neonatal : 1    # Realmente será necessário nesse bloco?
+            enf_neonatal : 1   
         },
         delay_time= lambda: distributions('parto_normal'),
         event_logger=event_logger
@@ -376,7 +365,7 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
             enf_obstetra : 1,
             tec_enf_bloco : 1,
             med_anestesista : 1,
-            enf_neonatal : 1     # Realmente será necessário nesse bloco?
+            enf_neonatal : 1 
         },
         delay_time= lambda: distributions('parto_cesarea'),
         event_logger=event_logger
@@ -395,7 +384,7 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
 
     pos_parto = ProcessBlock(
         'Pos_Parto', model.env,
-        resource=None,  # TODO: leito de Cuidado Materno-Infatil
+        resource=None,
         delay_time= lambda: distributions('pos_parto'),
         event_logger=event_logger
     )
@@ -509,14 +498,12 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
 
     tratamento.routes['Saida']["block"] = saida
     tratamento.routes['Proc_Esp']["block"] = procEsp
-    tratamento.routes['Parto']["block"] = define_parto   # Alterado aqui: precisa_inducao
+    tratamento.routes['Parto']["block"] = define_parto
     tratamento.routes['Internacao_ext']["block"] = internacao
     tratamento.routes['Exames_Observacao']["block"] = exam_obs
 
     procEsp.connect_to(saida)
 
-    # precisa_inducao.routes['Sim']['block'] = inducao  # indução funcionou = {sim : trabalho de parto, não : cesarea}
-    # precisa_inducao.routes['Nao']['block'] = trabalho_parto
 
     define_parto.routes['Trabalho_Parto']['block'] = trabalho_parto
     define_parto.routes['Cesarea_risco']['block'] = parto_cesarea
@@ -579,8 +566,6 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
 
     exam_obs.assign_attributes(cost= 129.57, revenue= 26.26)  # cost= 1036.55/dia
 
-    # parto_normal.assign_attributes(cost= 4744.13) --> Não pode usar assign_attributes mais de uma vez
-                                                        # para a mesma atividade, senão ele vai APAGAR o anterior
     parto_normal.modify_attributes(cost= lambda c: 4744.13)
     parto_normal.modify_attributes(revenue= lambda r: 443.40)
 
@@ -600,44 +585,42 @@ def build_model(final_simulation_time=None, event_logger=None, verbose=True,
     return model
 
 
-# ... fim do def build_model(...)
-    return model
-
 # ================================================================
 # Funções de Pós-Processamento
 # ================================================================
-# def analisar_fila_por_prioridade(model, atividade_alvo="Consulta"):
-#     dados = []
-#     for dispose_block in model.dispose_blocks:
-#         for entity in dispose_block.disposed_entities:
-#             if entity.get_attribute('disposal_time', 0) < model.warm_up_period:
-#                 continue
-#             if not str(entity.id).startswith('Gestante'):
-#                 continue
+def analisar_fila_por_prioridade(model, atividade_alvo="Consulta"):
+    dados = []
+    for dispose_block in model.dispose_blocks:
+        for entity in dispose_block.disposed_entities:
+            if entity.get_attribute('disposal_time', 0) < model.warm_up_period:
+                continue
+            if not str(entity.id).startswith('Gestante'):
+                continue
             
-#             prioridade = entity.get_attribute('priority', entity.priority)
-#             tempo_fila = entity.get_attribute(f"{atividade_alvo}_queue_time")
+            prioridade = entity.get_attribute('priority', entity.priority)
+            tempo_fila = entity.get_attribute(f"{atividade_alvo}_queue_time")
             
-#             if tempo_fila is not None:
-#                 dados.append({
-#                     'ID': entity.id,
-#                     'Prioridade': prioridade,
-#                     'Tempo_Fila_Minutos': tempo_fila
-#                 })
+            if tempo_fila is not None:
+                dados.append({
+                    'ID': entity.id,
+                    'Prioridade': prioridade,
+                    'Tempo_Fila_Minutos': tempo_fila
+                })
                 
-#     if not dados:
-#         return pd.DataFrame()
+    if not dados:
+        return pd.DataFrame()
         
-#     df = pd.DataFrame(dados)
-#     resumo = df.groupby('Prioridade').agg(
-#         Total_Pacientes=('ID', 'count'),
-#         Tempo_Medio_Fila=('Tempo_Fila_Minutos', 'mean'),
-#         Tempo_Maximo_Fila=('Tempo_Fila_Minutos', 'max')
-#     ).reset_index()
+    df = pd.DataFrame(dados)
+    resumo = df.groupby('Prioridade').agg(
+        Total_Pacientes=('ID', 'count'),
+        Tempo_Medio_Fila=('Tempo_Fila_Minutos', 'mean'),
+        Tempo_Maximo_Fila=('Tempo_Fila_Minutos', 'max')
+    ).reset_index()
     
-#     resumo['Tempo_Medio_Fila'] = resumo['Tempo_Medio_Fila'].round(2)
-#     resumo['Tempo_Maximo_Fila'] = resumo['Tempo_Maximo_Fila'].round(2)
-#     return resumo
+    resumo['Tempo_Medio_Fila'] = resumo['Tempo_Medio_Fila'].round(2)
+    resumo['Tempo_Maximo_Fila'] = resumo['Tempo_Maximo_Fila'].round(2)
+    return resumo
+
 
 def analisar_filas_multiplas(model, atividades=["Recepcao", "Triagem", "Consulta", "ProcEspecial", "Inducao", "Parto_Normal", "Parto_Cesarea"]):
     """
@@ -646,7 +629,7 @@ def analisar_filas_multiplas(model, atividades=["Recepcao", "Triagem", "Consulta
     """
     dados = []
     
-    # 1. Percorre as entidades finalizadas
+    # Percorre as entidades finalizadas
     for dispose_block in model.dispose_blocks:
         for entity in dispose_block.disposed_entities:
             
@@ -656,10 +639,9 @@ def analisar_filas_multiplas(model, atividades=["Recepcao", "Triagem", "Consulta
             if not str(entity.id).startswith('Gestante'):
                 continue
             
-            # prioridade = entity.get_attribute('priority', entity.priority)
             prioridade = entity.priority
             
-            # 2. Loop dinâmico pelas atividades solicitadas
+            # Loop dinâmico pelas atividades solicitadas
             for atividade in atividades:
                 tempo_fila = entity.get_attribute(f"{atividade}_queue_time")
                 
@@ -700,13 +682,6 @@ def main():
     model = build_model(event_logger=event_logger, verbose=False)
 
 
-    # Check stability BEFORE running (optional) --> Throughput: 1.76 entities/hour do .print_results()
-    # print("\nChecking system stability...")
-    # stability_analyzer = StabilityAnalyzer(model)
-    # stability = stability_analyzer.check_system_stability()
-    # model.stability_result = stability
-
-
     model.run_simulation(
         until=1440*30,         # *30*12
         warm_up_period=5000,  # 60 * 250
@@ -738,7 +713,7 @@ def main():
     print("ANÁLISE DE FILAS (MÉDIA E MÁXIMO) POR PRIORIDADE DE RISCO")
     print("="*80)
     
-    # Passamos os nomes EXATOS que você definiu na criação dos blocos
+    # Passamos os name_blocks
     setores_alvo = [ "Consulta", "Inducao", "Parto_Normal", "Parto_Cesarea"]
     
     df_filas = analisar_filas_multiplas(model, atividades=setores_alvo)
@@ -757,10 +732,6 @@ def main():
     print("="*80)    
     model.trace_entity('RN_Gestante_2')
     '''
-    # Warm-up analysis
-    # print("\nAnalyzing warm-up period...")
-    # warmup_analyzer = WarmUpAnalyzer(model)
-    # warmup_analyzer.analyze_warm_up_period()
 
     # 4. Plotting
     print("\nPlotting resourse use over time...")
@@ -798,66 +769,6 @@ def main():
     financial_analyzer = FinancialAnalyzer(model)
     financial_analyzer.print_financial_summary()
     # financial_analyzer.plot_financial_breakdown()
-
-
-    # ========================================
-    # Trace statistics
-    # ========================================
-    # model.print_trace_statistics()
-    # pause_simulation()
-    
-    # # 2. Detailed reporting
-    # reporter = SimulationReporter(model)
-    # reporter.print_results()
-    
-    # # 3. Warm-up analysis
-    # print("\nAnalyzing warm-up period...")
-    # warmup_analyzer = WarmUpAnalyzer(model)
-    # warmup_analyzer.analyze_warm_up_period()
-    
-    # # 4. Plotting
-    # print("\nPlotting resourse use over time...")
-    # plotter = SimulationPlotter(model)
-    
-    # # Plot resource utilization over time
-    # plotter.plot_resource_use_over_time(show_warm_up=True, resource='med_obstetra', moving_average_window=50)
-    # plotter.plot_resource_use_over_time(show_warm_up=True, resource='enf_triagem', moving_average_window=50)    
-    # plotter.plot_wip_over_time()
-    # plotter.plot_system_time_distribution()
-
-    # # Plot activity metrics
-    # print("\nPlotting activity metrics...")
-    # reporter._print_activity_metrics()
-    # plotter.plot_activity_metrics()
-
-        
-    # # Plot resource utilization summary
-    # print("\nPlotting resourse summary...")
-    # plotter.plot_resources_utilization()
-    # reporter._print_resource_metrics()
-    # reporter._print_entity_counts()
-    # reporter._print_block_statistics()
-
-    
-    # # Financial analysis
-    # print("\nPlotting financial analysys...")
-    # financial_analyzer = FinancialAnalyzer(model)
-    # financial_analyzer.print_financial_summary()
-    # financial_analyzer.plot_financial_breakdown()
-
-    # # 5. Export event log
-    # print("\nExporting event log...")
-    # df = event_logger.export_to_csv("results/maternidade_event_log.csv")
-    # print(f"\nFirst 10 events:")
-    # print(df.head(10))
-    
-    # # 6. Direct metrics access (if needed)
-    # metrics = MetricsCollector(model)
-    # entity_metrics = metrics.get_entity_metrics_summary()
-    # resource_metrics = metrics.get_resource_metrics_summary()
-    
-    # print(f"\nAverage system time: {entity_metrics['tempo_medio_sistema']:.2f} min")
-    # # print(f"Random seed for this run: {config.seed}")
 
     
     return model, event_logger
@@ -1056,5 +967,5 @@ def run_replications_cli():
     run_replications()
 
 # Run the simulation with interface 
-def run_visualization_cli(simulation_time=1440):
+def run_visualization_cli(simulation_time=1440*30):
     return run_visualization(build_model, simulation_time=simulation_time)
